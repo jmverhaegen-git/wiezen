@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kaartspel Scorebord</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 10px; display: flex; flex-direction: column; align-items: center; margin: 0; }
+        .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 600px; margin-bottom: 15px; position: relative; box-sizing: border-box; }
+        
+        #setup-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        .setup-content { background: white; padding: 25px; border-radius: 15px; width: 90%; max-width: 400px; text-align: center; }
+        .setup-content h2 { margin-top: 0; color: #007bff; }
+        .setup-input { width: 100%; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; box-sizing: border-box; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
+        th, td { border: 1px solid #ddd; padding: 8px 4px; text-align: center; overflow: hidden; text-overflow: ellipsis; }
+        th { background: #007bff; color: white; font-size: 0.85em; }
+        
+        .dealer { background: #fff3cd !important; color: #856404; font-weight: bold; border: 2px solid #ffeeba !important; }
+        
+        #checkboxes { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 10px 0; }
+        label { background: #eee; padding: 10px 8px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; white-space: nowrap; font-size: 0.9em; border: 1px solid #ccc; }
+        .p-check { margin-right: 4px; transform: scale(1.1); }
+
+        .input-group { margin: 10px 0; text-align: center; }
+        select, input, button { padding: 10px; margin: 5px; border-radius: 6px; border: 1px solid #ccc; font-size: 16px; }
+        
+        .btn-main { background: #28a745; color: white; border: none; font-weight: bold; width: 100%; margin-top: 10px; cursor: pointer; }
+        .undo-btn { background: #ffc107; color: #212529; border: none; width: 100%; margin-top: 5px; cursor: pointer; font-weight: bold; }
+        .reset-btn { background: #6c757d; border: none; color: white; }
+        .hard-reset { background: #dc3545; border: none; color: white; font-size: 0.8em; }
+        
+        #status-overlay { display: none; background: #f8f9fa; border: 2px solid #007bff; border-radius: 12px; padding: 15px; margin-top: 10px; text-align: center; }
+        .btn-yes { background: #28a745; color: white; min-width: 80px; }
+        .btn-no { background: #dc3545; color: white; min-width: 80px; }
+
+        #manual-input { display:none; margin-top: 10px; }
+        .manual-row { display: flex; justify-content: space-around; gap: 5px; }
+        .manual-col { display: flex; flex-direction: column; align-items: center; flex: 1; }
+        .manual-col span { font-size: 0.75em; margin-bottom: 3px; font-weight: bold; color: #555; text-align: center; }
+        .manual-pts { width: 100% !important; max-width: 60px; text-align: center; }
+
+        .total-row { font-weight: bold; background: #f8f9fa; font-size: 1.1em; }
+        .history-table { font-size: 0.8em; }
+        .checksum { font-size: 0.75em; text-align: right; margin-top: 5px; color: #666; }
+    </style>
+</head>
+<body onload="loadSavedNames()">
+
+<div id="setup-overlay">
+    <div class="setup-content">
+        <h2>Spelers Invoeren</h2>
+        <input type="text" id="name-0" class="setup-input" placeholder="Speler 1">
+        <input type="text" id="name-1" class="setup-input" placeholder="Speler 2">
+        <input type="text" id="name-2" class="setup-input" placeholder="Speler 3">
+        <input type="text" id="name-3" class="setup-input" placeholder="Speler 4">
+        <button class="btn-main" onclick="startGame()">Start Spel</button>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Totaalscore</h2>
+    <table id="score-table">
+        <thead>
+            <tr id="header-names">
+                <th>-</th><th>-</th><th>-</th><th>-</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr class="total-row" id="totals">
+                <td>0</td><td>0</td><td>0</td><td>0</td>
+            </tr>
+        </tbody>
+    </table>
+    <div class="checksum">Check: <span id="checksum">0</span></div>
+</div>
+
+<div class="card">
+    <div class="input-group">
+        <select id="game-type" onchange="toggleInputs()">
+            <option value="1">Vragen en Meegaan</option>
+            <option value="5">Troel (x2)</option>
+            <option value="2">Alleen Gaan</option>
+            <option value="3">Miserie</option>
+            <option value="4">Abondance</option>
+            <option value="6">Zelf invullen</option>
+        </select>
+    </div>
+
+    <div id="player-selection">
+        <div id="checkboxes">
+            <label id="lbl-0"><input type="checkbox" class="p-check" value="0"> <span class="p-name">P1</span></label>
+            <label id="lbl-1"><input type="checkbox" class="p-check" value="1"> <span class="p-name">P2</span></label>
+            <label id="lbl-2"><input type="checkbox" class="p-check" value="2"> <span class="p-name">P3</span></label>
+            <label id="lbl-3"><input type="checkbox" class="p-check" value="3"> <span class="p-name">P4</span></label>
+        </div>
+    </div>
+
+    <div id="slagen-input" class="input-group">
+        <label style="background:none; border:none;">Slagen: <input type="number" id="num-tricks" min="0" max="13" value="8" style="width:60px"></label>
+    </div>
+
+    <div id="manual-input">
+        <div class="manual-row">
+            <div class="manual-col"><span class="m-name">P1</span><input type="text" class="manual-pts" inputmode="decimal"></div>
+            <div class="manual-col"><span class="m-name">P2</span><input type="text" class="manual-pts" inputmode="decimal"></div>
+            <div class="manual-col"><span class="m-name">P3</span><input type="text" class="manual-pts" inputmode="decimal"></div>
+            <div class="manual-col"><span class="m-name">P4</span><input type="text" class="manual-pts" inputmode="decimal"></div>
+        </div>
+    </div>
+
+    <div id="status-overlay">
+        <p id="status-msg">Gelukt?</p>
+        <button class="btn-yes" onclick="finishStatusGame(true)">Ja</button>
+        <button class="btn-no" onclick="finishStatusGame(false)">Nee</button>
+    </div>
+
+    <button id="save-btn" class="btn-main" onclick="processAddRound()">Ronde Opslaan</button>
+    <button onclick="undoLastRound()" class="undo-btn">Laatste ronde ongedaan maken</button>
+</div>
+
+<div class="card">
+    <h3>Verloop</h3>
+    <table class="history-table">
+        <thead>
+            <tr id="history-header">
+                <th style="width:25px">#</th><th style="width:60px">Spel</th>
+                <th>P1</th><th>P2</th><th>P3</th><th>P4</th>
+            </tr>
+        </thead>
+        <tbody id="history-body"></tbody>
+    </table>
+    
+    <div style="display: flex; justify-content: space-between; margin-top: 15px;">
+        <button class="reset-btn" onclick="clearHistoryOnly()">Lijst Wissen</button>
+        <button class="hard-reset" onclick="hardReset()">Alles naar 0</button>
+    </div>
+</div>
+
+<script>
+    let players = ["P1", "P2", "P3", "P4"];
+    let scores = [0, 0, 0, 0];
+    let dealerIndex = 0;
+    let roundCount = 0;
+    let historyData = [];
+    let pendingRound = null;
+
+    function loadSavedNames() {
+        const saved = localStorage.getItem('kaartspelPlayers');
+        if (saved) {
+            const savedPlayers = JSON.parse(saved);
+            for(let i=0; i<4; i++) {
+                document.getElementById('name-' + i).value = savedPlayers[i];
+            }
+        }
+    }
+
+    function startGame() {
+        for(let i=0; i<4; i++) {
+            const val = document.getElementById('name-' + i).value.trim();
+            if(val) players[i] = val.substring(0, 10);
+        }
+        localStorage.setItem('kaartspelPlayers', JSON.stringify(players));
+        document.getElementById('setup-overlay').style.display = 'none';
+        updateUI();
+    }
+
+    function updateUI() {
+        players.forEach((name, i) => {
+            document.querySelectorAll('.p-name')[i].innerText = name;
+            document.querySelectorAll('.m-name')[i].innerText = name;
+            const th = document.getElementById('header-names').children[i];
+            th.innerText = name;
+            th.className = (i === dealerIndex) ? 'dealer' : '';
+            const lbl = document.getElementById('lbl-' + i);
+            lbl.className = (i === dealerIndex) ? 'dealer' : '';
+            document.getElementById('history-header').children[i+2].innerText = name;
+        });
+
+        const totalsRow = document.getElementById('totals').children;
+        let sum = 0;
+        scores.forEach((s, i) => {
+            totalsRow[i].innerText = s;
+            sum += s;
+        });
+        document.getElementById('checksum').innerText = sum;
+    }
+
+    function toggleInputs() {
+        const type = document.getElementById('game-type').value;
+        document.getElementById('slagen-input').style.display = (["1","2","5"].includes(type)) ? "block" : "none";
+        document.getElementById('player-selection').style.display = (type == "6") ? "none" : "block";
+        document.getElementById('manual-input').style.display = (type == "6") ? "block" : "none";
+        document.getElementById('status-overlay').style.display = "none";
+        document.getElementById('save-btn').style.display = "block";
+    }
+
+    function processAddRound() {
+        const type = document.getElementById('game-type').value;
+        const selectedIdx = Array.from(document.querySelectorAll('.p-check:checked')).map(cb => parseInt(cb.value));
+        const tricks = parseInt(document.getElementById('num-tricks').value);
+        let roundScores = [0, 0, 0, 0];
+        let label = "";
+
+        if (type == "6") {
+            label = "Handm.";
+            const inputs = document.querySelectorAll('.manual-pts');
+            roundScores = Array.from(inputs).map(inp => parseInt(inp.value) || 0);
+            const sum = roundScores.reduce((a, b) => a + b, 0);
+            if (sum !== 0 && !confirm(`De som is ${sum}. Toch aanvaarden?`)) return;
+            saveAndApplyRound(roundScores, label);
+        } else if (type == "3" || type == "4") {
+            if (selectedIdx.length !== 1) return alert("Selecteer 1 speler!");
+            label = (type == "3") ? "Miser" : "Abond";
+            pendingRound = { playerIdx: selectedIdx[0], label: label };
+            document.getElementById('status-msg').innerText = `${label} gelukt voor ${players[selectedIdx[0]]}?`;
+            document.getElementById('status-overlay').style.display = "block";
+            document.getElementById('save-btn').style.display = "none";
+        } else {
+            if (type == "1" || type == "5") {
+                if (selectedIdx.length !== 2) return alert("Selecteer 2 spelers!");
+                label = (type == "5") ? "Troel" : "Vr/Mee";
+                let factor = (type == "5") ? 2 : 1;
+                let pts = (tricks >= 8) ? (2 + (tricks - 8)) : (-2 - (8 - tricks));
+                if (tricks === 13 && pts > 0) pts = 10;
+                pts *= factor;
+                roundScores = roundScores.map((s, i) => selectedIdx.includes(i) ? pts : -pts);
+            } else if (type == "2") {
+                if (selectedIdx.length !== 1) return alert("Selecteer 1 speler!");
+                label = "Solo";
+                let pts = (tricks >= 5) ? (2 + (tricks - 5)) : (-2 - (5 - tricks));
+                roundScores = roundScores.map((s, i) => i === selectedIdx[0] ? pts * 3 : -pts);
+            }
+            saveAndApplyRound(roundScores, label);
+        }
+    }
+
+    function finishStatusGame(won) {
+        let roundScores = [0, 0, 0, 0];
+        let pts = won ? 15 : -15;
+        roundScores = roundScores.map((s, i) => i === pendingRound.playerIdx ? pts : (pts === 15 ? -5 : 5));
+        saveAndApplyRound(roundScores, pendingRound.label);
+        document.getElementById('status-overlay').style.display = "none";
+        document.getElementById('save-btn').style.display = "block";
+    }
+
+    function saveAndApplyRound(roundScores, label) {
+        historyData.push({ points: [...roundScores], label: label });
+        scores = scores.map((s, i) => s + roundScores[i]);
+        roundCount++;
+        const row = document.getElementById('history-body').insertRow(0);
+        row.innerHTML = `<td>${roundCount}</td><td>${label}</td>` + scores.map(s => `<td>${s}</td>`).join('');
+        dealerIndex = (dealerIndex + 1) % 4;
+        document.querySelectorAll('.p-check').forEach(cb => cb.checked = false);
+        document.querySelectorAll('.manual-pts').forEach(inp => inp.value = '');
+        updateUI();
+    }
+
+    function undoLastRound() {
+        if (historyData.length === 0) return;
+        if (confirm("Laatste ronde ongedaan maken?")) {
+            const lastRound = historyData.pop();
+            scores = scores.map((s, i) => s - lastRound.points[i]);
+            roundCount--;
+            dealerIndex = (dealerIndex - 1 + 4) % 4;
+            document.getElementById('history-body').deleteRow(0);
+            updateUI();
+        }
+    }
+
+    function clearHistoryOnly() {
+        document.getElementById('history-body').innerHTML = '';
+        roundCount = 0;
+        historyData = [];
+    }
+
+    function hardReset() {
+        if(confirm("Alle punten naar 0?")) {
+            scores = [0, 0, 0, 0]; dealerIndex = 0;
+            clearHistoryOnly(); updateUI();
+        }
+    }
+</script>
+</body>
+</html>
